@@ -1,52 +1,33 @@
-import os
-import json
+
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+import json
 
-# Load .env variables
+# Loading environment
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+csv_path = "data/home_depot_data_1_2021_12.csv"
 
+# Loading the dataset
+df = pd.read_csv(csv_path)
 
-CSV_PATH = "data/home_depot_data_1_2021_12.csv"
-OUTPUT_PATH = "data/embeddings.json"
+# Convert each row into a JSON string (preserving all columns)
+documents = []
+for _, row in df.iterrows():
+    row_dict = row.dropna().to_dict()  # dropping NaNs to reduce noise
+    json_str = json.dumps(row_dict, ensure_ascii=False)
+    documents.append(Document(page_content=json_str, metadata={"source": csv_path}))
 
-def embed_text(text):
-    response = client.embeddings.create(
-        input=[text],
-        model="text-embedding-ada-002"
-    )
-    return response.data[0].embedding
+print(f"Loaded and converted {len(documents)} product records into JSON documents.")
 
-def main():
-    df = pd.read_csv(CSV_PATH)
-    df = df[["product_id", "title", "description"]].dropna()
+# Creating embeddings
+embedding_model = OpenAIEmbeddings()
+vectorstore = FAISS.from_documents(documents, embedding_model)
 
-    embedded_products = []
-
-    for _, row in df.iterrows():
-        product_id = row["product_id"]
-        title = row["title"]
-        description = row["description"]
-        full_text = f"{title}. {description}"
-
-        try:
-            vector = embed_text(full_text)
-            embedded_products.append({
-                "product_id": str(product_id),
-                "title": title,
-                "description": description,
-                "embedding": vector
-            })
-        except Exception as e:
-            print(f"Failed to embed product {product_id}: {e}")
-
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(embedded_products, f)
-
-if __name__ == "__main__":
-    main()
+# Save FAISS index
+save_path = "data/faiss_index"
+vectorstore.save_local(folder_path=save_path)
+print(f"FAISS index saved to '{save_path}'")

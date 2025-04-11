@@ -1,44 +1,91 @@
+# rag_query_engine.py
+
 import os
-import json
-import numpy as np
-from openai import OpenAI
+import subprocess
 from dotenv import load_dotenv
+from langchain_community.vectorstores import FAISS
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain.memory import ConversationSummaryBufferMemory
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-# Load API key
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Check if FAISS index exists, else run ingest.py
+index_dir = os.path.join("data", "faiss_index")
+index_file = os.path.join(index_dir, "faiss.index")
 
-# Path to saved embeddings
-EMBEDDING_FILE = "data/embeddings.json"
+if not os.path.exists(index_file):
+    print("FAISS index not found. Running ingest.py to create it...")
+    subprocess.run(["python3", "ingest.py"], check=True)
 
-def load_embeddings():
-    with open(EMBEDDING_FILE, "r") as f:
-        return json.load(f)
+# Load FAISS index
+vectorstore = FAISS.load_local(index_dir, OpenAIEmbeddings(), allow_dangerous_deserialization=True)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-def embed_query(text):
-    response = client.embeddings.create(
-        input=[text],
-        model="text-embedding-ada-002"
-    )
-    return np.array(response.data[0].embedding)
+# Setting up llm and streaming enabled
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.4, streaming=True)
 
-def cosine_similarity(a, b):
-    a = np.array(a)
-    b = np.array(b)
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+# Token-limited summarization memory
+memory = ConversationSummaryBufferMemory(
+    llm=llm,
+    memory_key="chat_history",
+    return_messages=True,
+    max_token_limit=1000
+)
 
-def retrieve_relevant_product(query, top_k=1):
-    query_embedding = embed_query(query)
-    products = load_embeddings()
+# Prompt to reformulate question using chat history
+contextualize_q_prompt = ChatPromptTemplate.from_messages([
+    ("system", "Given a chat history and the latest user question "
+               "which might reference context in the chat history, "
+               "formulate a standalone question. Do NOT answer it."),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+history_aware_retriever = create_history_aware_retriever(
+    llm=llm,
+    retriever=retriever,
+    prompt=contextualize_q_prompt,
+)
 
-    scored = []
-    for product in products:
-        score = cosine_similarity(query_embedding, product["embedding"])
-        scored.append((score, product))
+# QA Prompt that explicitly mentions JSON format context
+qa_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant for a product catalog. "
+               "The context below is a list of JSON entries, each representing one product. "
+               "Each entry includes fields such as product_id, sku, brand, title, price, and more. "
+               "Answer the user's question using only this information. "
+               "If you cannot find an answer in the context, respond with: "
+               "\"I couldn't find that in the catalog.\"\n\n{context}"),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
 
-    scored.sort(reverse=True, key=lambda x: x[0])
+# Creating final RAG chain
+rag_chain = create_retrieval_chain(
+    retriever=history_aware_retriever,
+    combine_docs_chain=question_answer_chain
+)
 
-    return [item[1] for item in scored[:top_k]]
 
+def ask_question(question: str, stream: bool = True):
+    inputs = {
+        "input": question,
+        "chat_history": memory.chat_memory.messages
+    }
+
+    if stream:
+        final_answer = ""
+        for chunk in rag_chain.stream(inputs):
+            if "answer" in chunk:
+                final_answer += chunk["answer"]
+                yield chunk["answer"]
+        memory.save_context({"input": question}, {"answer": final_answer})
+    else:
+        response = rag_chain.invoke(inputs)
+        memory.save_context({"input": question}, {"answer": response["answer"]})
+        return {
+            "answer": response["answer"],
+            "sources": list(set(doc.metadata.get("source", "N/A") for doc in response.get("context", [])))
+        }

@@ -1,11 +1,8 @@
-'use client';
+import Chatbot from "@/components/Chatbot";
 
-import Chatbot from '../components/Chatbot';
-
-export default function HomePage() {
+export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-100">
-
+    <main>
       <Chatbot />
     </main>
   );

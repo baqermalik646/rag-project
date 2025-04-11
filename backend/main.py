@@ -1,20 +1,19 @@
 from fastapi import FastAPI
-from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from openai import OpenAI
 import os
+from langchain.chains import ConversationalRetrievalChain
+from langchain_openai import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
+from rag_query_engine import retriever
 
-from rag_query_engine import retrieve_relevant_product
-
+# Load environment
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
+# FastAPI app setup
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,6 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Chat request/response models
 class ChatRequest(BaseModel):
     session_id: str
     message: str
@@ -30,79 +30,24 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     answer: str
-    product_title: str
-    product_description: str
 
+# Creating memory for conversation
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+# Loading ChatGPT model via LangChain
+llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+
+# Creating the RAG chain with retriever and memory
+qa_chain = ConversationalRetrievalChain.from_llm(
+    llm=llm,
+    retriever=retriever,
+    memory=memory,
+    verbose=True
+)
+
+# POST endpoint
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     user_question = request.message
-
-    top_product = retrieve_relevant_product(user_question)[0]
-
-    context = f"""
-    You are a helpful assistant for customers.
-    The customer asked: "{user_question}"
-
-    Here's a related product you can use to help answer:
-    Title: {top_product['title']}
-    Description: {top_product['description']}
-    """
-
-    response = client.chat.completions.create(
-        #model="gpt-3.5-turbo",
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant for Home Depot customers."},
-            {"role": "user", "content": context}
-        ]
-    )
-
-    answer = response.choices[0].message.content.strip()
-
-    return ChatResponse(
-        session_id=request.session_id,
-        answer=answer,
-        product_title=top_product["title"],
-        product_description=top_product["description"]
-    )
-
-@app.websocket("/ws/chat")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            session_id = data.get("session_id")
-            message = data.get("message")
-
-            top_product = retrieve_relevant_product(message)[0]
-
-            context = f"""
-            The customer asked: "{message}"
-            Use ONLY the following product to answer:
-            Title: {top_product['title']}
-            Description: {top_product['description']}
-            """
-
-            response = client.chat.completions.create(
-                #model="gpt-3.5-turbo",
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant for customers."},
-                    {"role": "user", "content": context}
-                ],
-                stream=True
-            )
-
-            for chunk in response:
-                answer = chunk.choices[0].delta.content or ""
-                await websocket.send_json({
-                    "session_id": session_id,
-                    "answer": answer,
-                    "product_title": top_product["title"],
-                    "product_description": top_product["description"]
-                })
-
-    except WebSocketDisconnect:
-        print("WebSocket disconnected")
+    response = qa_chain({"question": user_question})
+    return ChatResponse(session_id=request.session_id, answer=response["answer"])
