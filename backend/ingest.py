@@ -1,10 +1,13 @@
 
+
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
+from tqdm import tqdm
 import json
+
 
 # Loading environment
 load_dotenv()
@@ -23,9 +26,28 @@ for _, row in df.iterrows():
 
 print(f"Loaded and converted {len(documents)} product records into JSON documents.")
 
-# Creating embeddings
+# Initialize embeddings
 embedding_model = OpenAIEmbeddings()
-vectorstore = FAISS.from_documents(documents, embedding_model)
+
+
+# Helper function for safe batching
+def batch_faiss_index(docs, batch_size=100):
+    sub_vectorstores = []
+    for i in tqdm(range(0, len(docs), batch_size), desc="Embedding in batches"):
+        batch = docs[i:i + batch_size]
+        sub_vs = FAISS.from_documents(batch, embedding_model)
+        sub_vectorstores.append(sub_vs)
+
+    # Merge all vectorstores into one
+    merged_vectorstore = sub_vectorstores[0]
+    for sub_vs in sub_vectorstores[1:]:
+        merged_vectorstore.merge_from(sub_vs)
+
+    return merged_vectorstore
+
+# Run batched embedding
+vectorstore = batch_faiss_index(documents, batch_size=100)
+
 
 # Save FAISS index
 save_path = "data/faiss_index"
