@@ -61,3 +61,7 @@ This is a Retrieval-Augmented Generation (RAG)-based chatbot designed to answer 
    ```bash
    npm run dev
 
+5. **Open any browser and navigate to the following url:**
+     http://localhost:3000
+
+
