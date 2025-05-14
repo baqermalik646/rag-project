@@ -1,5 +1,3 @@
-
-
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
@@ -7,49 +5,35 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from tqdm import tqdm
 import json
+import os
 
-
-# Loading environment
+# Load environment
 load_dotenv()
-
 csv_path = "data/home_depot_data_1_2021_12.csv"
-
-# Loading the dataset
 df = pd.read_csv(csv_path)
 
-# Convert each row into a JSON string (preserving all columns)
 documents = []
 for _, row in df.iterrows():
-    row_dict = row.dropna().to_dict()  # dropping NaNs to reduce noise
+    row_dict = row.dropna().to_dict()
     json_str = json.dumps(row_dict, ensure_ascii=False)
     documents.append(Document(page_content=json_str, metadata={"source": csv_path}))
 
-print(f"Loaded and converted {len(documents)} product records into JSON documents.")
-
-# Initialize embeddings
 embedding_model = OpenAIEmbeddings()
 
-
-# Helper function for safe batching
 def batch_faiss_index(docs, batch_size=100):
     sub_vectorstores = []
-    for i in tqdm(range(0, len(docs), batch_size), desc="Embedding in batches"):
+    for i in tqdm(range(0, len(docs), batch_size), desc="Embedding"):
         batch = docs[i:i + batch_size]
         sub_vs = FAISS.from_documents(batch, embedding_model)
         sub_vectorstores.append(sub_vs)
 
-    # Merge all vectorstores into one
     merged_vectorstore = sub_vectorstores[0]
     for sub_vs in sub_vectorstores[1:]:
         merged_vectorstore.merge_from(sub_vs)
 
     return merged_vectorstore
 
-# Run batched embedding
-vectorstore = batch_faiss_index(documents, batch_size=100)
-
-
-# Save FAISS index
+vectorstore = batch_faiss_index(documents)
 save_path = "data/faiss_index"
 vectorstore.save_local(folder_path=save_path)
 print(f"FAISS index saved to '{save_path}'")
