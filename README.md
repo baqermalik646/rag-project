@@ -20,15 +20,17 @@ source venv/bin/activate
 
 3. Install the dependencies
 
-4. Add your OpenAI API key to a .env file:
+Note: If dependencies are failing, run requirements.txt 
+
+5. Add your OpenAI API key to a .env file:
 OPENAI_API_KEY=your_openai_key
 
-5. Generate embeddings:
+6. Generate embeddings:
 python3 ingest.py
 Note: This might take a while
 
-6. Start the server:
-uvicorn main:app --reload
+7. Start the server:
+python -m uvicorn main:app --reload
 
 ### Frontend (Next.js)
 
