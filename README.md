@@ -27,28 +27,37 @@ This is a Retrieval-Augmented Generation (RAG)-based chatbot designed to answer 
    ```bash
    cd backend
    
-2. Create and activate a virtual environment:
-
+2. **Create and activate a virtual environment:**
+   ```bash
    python3 -m venv venv
-source venv/bin/activate
+   source venv/bin/activate
 
-3. Install dependencies:
+3. **Install dependencies:**
+   ```bash
    pip install -r requirements.txt
 
-4. Add your OpenAI API key to a .env file:
+4. **Add your OpenAI API key to a .env file:**
+   ```bash
    OPENAI_API_KEY=your_openai_key
 
-5. Generate vector embeddings from product data (may take a while):
+6. **Generate vector embeddings from product data (may take a while):**
+   ```bash
    python3 ingest.py
 
-6. Start the backend server:
+8. **Start the backend server:**
+   ```bash
    python -m uvicorn main:app --reload
 
 ### Frontend (Next.js)
-1. Navigate to the frontend folder:
+1. **Navigate to the frontend folder:**
+   ```bash
    cd frontend/my-app
-2. Install frontend dependencies:
+   
+2. **Install frontend dependencies:**
+   ```bash
    npm install
-3. Run the frontend server:
+   
+4. **Run the frontend server:**
+   ```bash
    npm run dev
 
