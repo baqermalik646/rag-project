@@ -1,13 +1,13 @@
 
-# 🛍️ Customer Chatbot
+# Customer Chatbot
 
-## 🧠 Project Overview
+## Project Overview
 
 This is a Retrieval-Augmented Generation (RAG)-based chatbot designed to answer customer questions about retail products using OpenAI’s GPT model. The chatbot integrates semantic search over real product data (e.g., prices, SKUs, brand names) and delivers context-aware, multi-turn conversations using FastAPI for the backend and Next.js for the frontend.
 
 ---
 
-## 🚀 Features
+## Features
 
 - **RAG with Semantic Search:** Uses FAISS and OpenAI embeddings to retrieve relevant product entries for customer queries.
 - **Context-Aware Conversations:** Maintains chat history across turns using `RunnableWithMessageHistory` to support natural dialogue (e.g., "What’s its price?" after a prior product mention).
@@ -19,9 +19,9 @@ This is a Retrieval-Augmented Generation (RAG)-based chatbot designed to answer 
 
 ---
 
-## ⚙️ How to Run
+## How to Run
 
-### 🧩 Backend (FastAPI)
+### Backend (FastAPI)
 
 1. **Navigate to the backend folder:**
    ```bash
