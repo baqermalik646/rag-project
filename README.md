@@ -26,3 +26,29 @@ This is a Retrieval-Augmented Generation (RAG)-based chatbot designed to answer 
 1. **Navigate to the backend folder:**
    ```bash
    cd backend
+   
+2. Create and activate a virtual environment:
+
+   python3 -m venv venv
+source venv/bin/activate
+
+3. Install dependencies:
+   pip install -r requirements.txt
+
+4. Add your OpenAI API key to a .env file:
+   OPENAI_API_KEY=your_openai_key
+
+5. Generate vector embeddings from product data (may take a while):
+   python3 ingest.py
+
+6. Start the backend server:
+   python -m uvicorn main:app --reload
+
+### Frontend (Next.js)
+1. Navigate to the frontend folder:
+   cd frontend/my-app
+2. Install frontend dependencies:
+   npm install
+3. Run the frontend server:
+   npm run dev
+
